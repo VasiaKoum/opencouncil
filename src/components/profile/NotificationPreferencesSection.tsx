@@ -62,6 +62,53 @@ function CitySelector({
     );
 }
 
+interface CitySelectorProps {
+    label: string;
+    size?: 'default' | 'sm';
+    cities: CityMinimalWithCounts[];
+    loading: boolean;
+    onFetchCities: () => void;
+    onSelect: (city: CityMinimalWithCounts | null) => void;
+    placeholder: string;
+    searchPlaceholder: string;
+    emptyMessage: string;
+}
+
+function CitySelector({
+    label,
+    size = 'default',
+    cities,
+    loading,
+    onFetchCities,
+    onSelect,
+    placeholder,
+    searchPlaceholder,
+    emptyMessage,
+}: CitySelectorProps) {
+    return (
+        <div className="w-fit">
+            <Combobox
+                items={cities}
+                value={null}
+                onChange={onSelect}
+                placeholder={placeholder}
+                searchPlaceholder={searchPlaceholder}
+                getItemLabel={(city) => city.name}
+                getItemValue={(city) => `${city.name} ${city.name_municipality}`}
+                emptyMessage={emptyMessage}
+                loading={loading}
+                className="w-64"
+                TriggerComponent={() => (
+                    <Button variant="outline" size={size} onClick={onFetchCities}>
+                        <Bell className="mr-2 h-4 w-4" />
+                        {label}
+                    </Button>
+                )}
+            />
+        </div>
+    );
+}
+
 interface NotificationPreference {
     id: string;
     cityId: string;

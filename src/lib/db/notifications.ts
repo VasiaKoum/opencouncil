@@ -1458,6 +1458,26 @@ export async function deleteNotificationPreference(preferenceId: string, userId:
     }
 }
 
+export async function disableAllNotificationPreferences(userId: string) {
+    await prisma.notificationPreference.updateMany({
+        where: { userId },
+        data: { notifyByEmail: false, notifyByPhone: false },
+    });
+}
+
+export async function disableNotificationPreferenceByCityId(userId: string, cityId: string) {
+    const preference = await prisma.notificationPreference.findUnique({
+        where: { userId_cityId: { userId, cityId } },
+    });
+
+    if (!preference) throw new NotFoundError('Notification preference not found');
+
+    return prisma.notificationPreference.update({
+        where: { id: preference.id },
+        data: { notifyByEmail: false, notifyByPhone: false },
+    });
+}
+
 /**
  * Fetch the data the unsubscribe page needs to render for a (userId, cityId)
  * pair extracted from an unsubscribe token. Returns null if the user no
