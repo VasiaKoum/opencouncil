@@ -206,7 +206,7 @@ export function UserInfoForm({ user, isOnboarded }: UserInfoFormProps) {
                                 <div className="flex flex-col justify-between gap-2">
                                     <p className="text-xs text-muted-foreground">
                                         {t("lastUpdated", { date: format(new Date(user.updatedAt), 'dd/MM/yyyy HH:mm', { locale: dateLocale }) })}
-                                    </p>
+                                    </p >
                                     <Button
                                         type="submit"
                                         disabled={isSubmitting || !formData.name || (phoneActive && !phoneEmpty && !phoneValid)}
@@ -214,10 +214,10 @@ export function UserInfoForm({ user, isOnboarded }: UserInfoFormProps) {
                                     >
                                         {isSubmitting ? t("saving") : t("savePersonalInfo")}
                                     </Button>
-                                </div>
-                            </form>
-                        </div>
-                    </TabsContent>
+                                </div >
+                            </form >
+                        </div >
+                    </TabsContent >
 
                     <TabsContent value="communication" className="mt-0">
                         <div className="space-y-4">
@@ -256,17 +256,17 @@ export function UserInfoForm({ user, isOnboarded }: UserInfoFormProps) {
                                 <div className="flex flex-col gap-2">
                                     <p className="text-xs text-muted-foreground">
                                         {t("lastUpdated", { date: format(new Date(user.updatedAt), 'dd/MM/yyyy HH:mm', { locale: dateLocale }) })}
-                                    </p>
+                                    </p >
                                     <div className="flex items-center justify-between">
                                         <Button type="submit" disabled={isSubmitting} className="whitespace-normal h-auto">
                                             {isSubmitting ? t("saving") : t("saveCommunicationPreferences")}
                                         </Button>
                                     </div>
-                                </div>
-                            </form>
-                        </div>
+                                </div >
+                            </form >
+                        </div >
 
-                    </TabsContent>
+                    </TabsContent >
 
                     <TabsContent value="notifications" className="mt-0">
                         <NotificationPreferencesSection />
@@ -319,8 +319,8 @@ export function UserInfoForm({ user, isOnboarded }: UserInfoFormProps) {
                             </Dialog>
                         </div>
                     </TabsContent>
-                </div>
-            </div>
-        </Tabs>
+                </div >
+            </div >
+        </Tabs >
     );
 }

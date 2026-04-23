@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { updateUserProfile, deleteCurrentUser, UserProfileUpdateData } from "@/lib/db/users";
+import { updateUserProfile, deleteCurrentUser } from "@/lib/db/users";
 import { sendUserOnboardedAdminAlert } from "@/lib/discord";
 import { updateProfileSchema } from "@/lib/zod-schemas/user";
 
