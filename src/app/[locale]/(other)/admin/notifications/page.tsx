@@ -11,6 +11,8 @@ import { NotificationBulkActions } from '@/components/admin/notifications/Notifi
 import { releaseNotificationsForMeeting, createMeetingKey } from '@/components/admin/notifications/utils';
 import { MeetingNotificationStats } from '@/lib/db/notifications';
 import { useToast } from '@/hooks/use-toast';
+import { useSession } from 'next-auth/react';
+import { SendProductUpdateDialog } from '@/components/admin/product-updates/SendProductUpdateDialog';
 
 type DateRangeOption = '7days' | '30days' | '90days' | 'all';
 
@@ -21,6 +23,8 @@ export default function AdminNotificationsPage() {
     const [releasingMeetings, setReleasingMeetings] = useState<Set<string>>(new Set());
     const [selectedMeetingKeys, setSelectedMeetingKeys] = useState<Set<string>>(new Set());
     const { toast } = useToast();
+    const { data: session } = useSession();
+    const isSuperAdmin = session?.user?.isSuperAdmin ?? false;
 
     // Pagination state
     const [pagination, setPagination] = useState({
@@ -206,14 +210,17 @@ export default function AdminNotificationsPage() {
                         Manage notification delivery for all cities
                     </p>
                 </div>
-                <Button
-                    onClick={() => fetchNotifications(pagination.page)}
-                    variant="outline"
-                    disabled={loading}
-                >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    {isSuperAdmin && <SendProductUpdateDialog />}
+                    <Button
+                        onClick={() => fetchNotifications(pagination.page)}
+                        variant="outline"
+                        disabled={loading}
+                    >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}

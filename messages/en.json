@@ -821,5 +821,19 @@
         "noItems": "There are no meetings in OpenCouncil.",
         "previous": "Previous",
         "next": "Next"
+    },
+    "ProductUpdates": {
+        "triggerButton": "Send product update",
+        "dialogTitle": "Send product update email",
+        "dialogDescription": "Send a test to yourself first, then use \"Send to all\" to deliver to the hardcoded recipient list.",
+        "testEmailLabel": "Test email address",
+        "testEmailPlaceholder": "you@example.com",
+        "testEmailHelp": "Leave empty and use \"Send to all\" to send to the real recipient list.",
+        "sendTestButton": "Send test",
+        "sendAllButton": "Send to all",
+        "successTitle": "Send complete",
+        "successSummary": "Sent: {sent}, failed: {failed}.",
+        "failedList": "Failed addresses",
+        "errorTitle": "Send failed"
     }
 }

@@ -821,5 +821,19 @@
         "searchItems": "Αναζήτηση προσφορών",
         "noItems": "Καμία προσφορά",
         "item": "Προσφορά"
+    },
+    "ProductUpdates": {
+        "triggerButton": "Αποστολή ενημέρωσης",
+        "dialogTitle": "Αποστολή email ενημέρωσης προϊόντος",
+        "dialogDescription": "Στείλτε πρώτα δοκιμαστικό στον εαυτό σας, μετά χρησιμοποιήστε «Αποστολή σε όλους» για την πλήρη λίστα.",
+        "testEmailLabel": "Δοκιμαστικό email",
+        "testEmailPlaceholder": "you@example.com",
+        "testEmailHelp": "Αφήστε κενό και χρησιμοποιήστε «Αποστολή σε όλους» για αποστολή στην πραγματική λίστα παραληπτών.",
+        "sendTestButton": "Αποστολή δοκιμαστικού",
+        "sendAllButton": "Αποστολή σε όλους",
+        "successTitle": "Η αποστολή ολοκληρώθηκε",
+        "successSummary": "Εστάλησαν: {sent}, απέτυχαν: {failed}.",
+        "failedList": "Διευθύνσεις που απέτυχαν",
+        "errorTitle": "Η αποστολή απέτυχε"
     }
 }
