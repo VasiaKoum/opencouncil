@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
     Dialog,
@@ -15,6 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Mail, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import {
+    ProductUpdateEmailEditor,
+    type ProductUpdateEmailEditorHandle,
+} from './ProductUpdateEmailEditor';
+import { DEFAULT_PRODUCT_UPDATE_TEMPLATE_MARKDOWN } from '@/lib/email/templates/productUpdateDefault';
 
 interface SendResult {
     sent: number;
@@ -26,11 +31,32 @@ type Status = 'idle' | 'sending-test' | 'sending-all' | 'success' | 'error';
 
 export function SendProductUpdateDialog() {
     const t = useTranslations('ProductUpdates');
+    const editorRef = useRef<ProductUpdateEmailEditorHandle>(null);
     const [open, setOpen] = useState(false);
+    const [subject, setSubject] = useState('');
     const [testEmail, setTestEmail] = useState('');
+    const [recipientCount, setRecipientCount] = useState<number | null>(null);
     const [status, setStatus] = useState<Status>('idle');
     const [result, setResult] = useState<SendResult | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // Fetch the live recipient count when the dialog opens.
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        setRecipientCount(null);
+        fetch('/api/admin/product-updates/recipients')
+            .then((res) => (res.ok ? res.json() : { count: 0 }))
+            .then((data) => {
+                if (!cancelled) setRecipientCount(typeof data?.count === 'number' ? data.count : 0);
+            })
+            .catch(() => {
+                if (!cancelled) setRecipientCount(0);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
 
     const reset = () => {
         setStatus('idle');
@@ -41,19 +67,31 @@ export function SendProductUpdateDialog() {
     const handleOpenChange = (next: boolean) => {
         setOpen(next);
         if (!next) {
+            setSubject('');
             setTestEmail('');
             reset();
         }
     };
 
-    const send = async (body: Record<string, unknown>, nextStatus: Status) => {
+    const send = async (
+        extra: Record<string, unknown>,
+        nextStatus: Exclude<Status, 'idle' | 'success' | 'error'>,
+    ) => {
         reset();
+
+        const bodyHtml = editorRef.current?.getSanitizedHtml() ?? '';
+        if (!subject.trim() || !bodyHtml.trim()) {
+            setErrorMessage(t('missingContent'));
+            setStatus('error');
+            return;
+        }
+
         setStatus(nextStatus);
         try {
             const res = await fetch('/api/admin/product-updates/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ subject, bodyHtml, ...extra }),
             });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
@@ -85,13 +123,36 @@ export function SendProductUpdateDialog() {
                     {t('triggerButton')}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent align="start" className="sm:max-w-4xl max-h-[100vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{t('dialogTitle')}</DialogTitle>
                     <DialogDescription>{t('dialogDescription')}</DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="space-y-4 w-full">
+                    <div className="space-y-2">
+                        <Label htmlFor="product-update-subject">{t('subjectLabel')}</Label>
+                        <Input
+                            id="product-update-subject"
+                            type="text"
+                            placeholder={t('subjectPlaceholder')}
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            disabled={isLoading}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="product-update-body">{t('bodyLabel')}</Label>
+                        <div className="rounded-md border bg-background">
+                            <ProductUpdateEmailEditor
+                                ref={editorRef}
+                                initialContent={DEFAULT_PRODUCT_UPDATE_TEMPLATE_MARKDOWN}
+                                textareaId="product-update-body"
+                            />
+                        </div>
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="product-update-test-email">{t('testEmailLabel')}</Label>
                         <Input
@@ -140,9 +201,15 @@ export function SendProductUpdateDialog() {
                         {status === 'sending-test' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {t('sendTestButton')}
                     </Button>
-                    <Button onClick={sendAll} disabled={isLoading} variant="default">
+                    <Button
+                        onClick={sendAll}
+                        disabled={isLoading || recipientCount === 0}
+                        variant="default"
+                    >
                         {status === 'sending-all' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {t('sendAllButton')}
+                        {recipientCount === null
+                            ? t('sendAllButton')
+                            : t('sendAllButtonWithCount', { count: recipientCount })}
                     </Button>
                 </DialogFooter>
             </DialogContent>

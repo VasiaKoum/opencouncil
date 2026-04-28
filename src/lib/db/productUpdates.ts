@@ -1,32 +1,34 @@
 "use server";
 
+import prisma from './prisma';
+
 /**
- * Phase 1 product-update email recipients.
- *
- * The recipient list is intentionally hardcoded here. No DB-driven audience
- * picker, no audit row. When we want to send a product update:
- *   1. Update the list below with the users to include (or leave empty and
- *      rely on the admin UI's test-email input).
- *   2. Edit `src/lib/email/templates/ProductUpdateEmail.tsx` with the copy
- *      to send.
- *   3. A super-admin clicks "Send emails" from the admin notifications page.
- *
- * userId + cityId are required for generating a per-recipient unsubscribe
- * token. cityId is used only to satisfy the token payload; the unsubscribe
- * page's "preferences" action clears `allowProductUpdates` independently of
- * any city.
+ * Audience for product-update emails: every non-super-admin user who hasn't
+ * opted out of product updates (`allowProductUpdates`). The consent gate is
+ * what turns this from "spam to everyone" into a deliverable Phase-1 audience.
  */
 export interface ProductUpdateRecipient {
     email: string;
     name: string;
     userId: string;
-    cityId: string;
 }
 
-const PRODUCT_UPDATE_RECIPIENTS: ProductUpdateRecipient[] = [
-    // { email: 'user@example.com', name: 'User', userId: 'clxxxx', cityId: 'athens' },
-];
-
 export async function getProductUpdateRecipients(): Promise<ProductUpdateRecipient[]> {
-    return PRODUCT_UPDATE_RECIPIENTS;
+    const users = await prisma.user.findMany({
+        where: {
+            isSuperAdmin: false,
+            allowProductUpdates: true,
+        },
+        select: {
+            id: true,
+            email: true,
+            name: true,
+        },
+    });
+
+    return users.map((u) => ({
+        email: u.email,
+        name: u.name ?? '',
+        userId: u.id,
+    }));
 }

@@ -3,11 +3,11 @@
 import { sendEmail } from '@/lib/email/resend';
 import { renderReactEmailToHtml } from '@/lib/email/render';
 import { ProductUpdateEmail } from '@/lib/email/templates/ProductUpdateEmail';
+import { fillProductUpdatePlaceholders } from '@/lib/email/templates/productUpdateDefault';
 import { buildUnsubscribeUrl } from '@/lib/notifications/tokens';
 import { getProductUpdateRecipients, ProductUpdateRecipient } from '@/lib/db/productUpdates';
 
 const FROM_ADDRESS = 'OpenCouncil <notifications@opencouncil.gr>';
-const SUBJECT = 'Νέα από το OpenCouncil';
 const RATE_LIMIT_DELAY_MS = 500;
 
 function sleep(ms: number): Promise<void> {
@@ -20,24 +20,42 @@ export interface SendProductUpdateResult {
     failedEmails: string[];
 }
 
-async function sendToRecipient(recipient: ProductUpdateRecipient): Promise<boolean> {
-    const unsubscribeUrl = buildUnsubscribeUrl(recipient.userId, recipient.cityId, 'el');
-    const html = await renderReactEmailToHtml(
-        ProductUpdateEmail({ userName: recipient.name, unsubscribeUrl })
-    );
+async function renderForRecipient(
+    bodyHtml: string,
+    userName: string,
+    unsubscribeUrl: string,
+): Promise<string> {
+    const filled = fillProductUpdatePlaceholders(bodyHtml, { userName, unsubscribeUrl });
+    return renderReactEmailToHtml(ProductUpdateEmail({ bodyHtml: filled }));
+}
+
+async function sendToRecipient(
+    recipient: ProductUpdateRecipient,
+    subject: string,
+    bodyHtml: string,
+): Promise<boolean> {
+    const unsubscribeUrl = await buildUnsubscribeUrl(recipient.userId, undefined, 'el');
+    const html = await renderForRecipient(bodyHtml, recipient.name, unsubscribeUrl);
     const result = await sendEmail({
         from: FROM_ADDRESS,
         to: recipient.email,
-        subject: SUBJECT,
+        subject,
         html,
     });
     return result.success;
 }
 
 /**
- * Send a product-update email to the hardcoded recipient list with rate limiting.
+ * Send a product-update email to every consenting recipient with rate limiting.
+ * `bodyHtml` is the editor-sanitized HTML with {{userName}}/{{unsubscribeUrl}}
+ * placeholders intact; per-recipient substitution happens here. Sanitization
+ * is handled client-side so this server module stays jsdom-free.
  */
-export async function sendProductUpdateToAll(): Promise<SendProductUpdateResult> {
+export async function sendProductUpdateToAll(params: {
+    subject: string;
+    bodyHtml: string;
+}): Promise<SendProductUpdateResult> {
+    const { subject, bodyHtml } = params;
     const recipients = await getProductUpdateRecipients();
     let sent = 0;
     let failed = 0;
@@ -46,7 +64,7 @@ export async function sendProductUpdateToAll(): Promise<SendProductUpdateResult>
     for (let i = 0; i < recipients.length; i++) {
         const recipient = recipients[i];
         try {
-            const ok = await sendToRecipient(recipient);
+            const ok = await sendToRecipient(recipient, subject, bodyHtml);
             if (ok) sent++;
             else {
                 failed++;
@@ -71,21 +89,20 @@ export async function sendProductUpdateToAll(): Promise<SendProductUpdateResult>
  * be previewed end-to-end; clicking the link unsubscribes the admin.
  */
 export async function sendProductUpdateTest(params: {
+    subject: string;
+    bodyHtml: string;
     testEmail: string;
     testName?: string;
     adminUserId: string;
-    adminCityId: string;
 }): Promise<SendProductUpdateResult> {
-    const { testEmail, testName, adminUserId, adminCityId } = params;
+    const { subject, bodyHtml, testEmail, testName, adminUserId } = params;
     try {
-        const unsubscribeUrl = buildUnsubscribeUrl(adminUserId, adminCityId, 'el');
-        const html = await renderReactEmailToHtml(
-            ProductUpdateEmail({ userName: testName ?? '', unsubscribeUrl })
-        );
+        const unsubscribeUrl = await buildUnsubscribeUrl(adminUserId, undefined, 'el');
+        const html = await renderForRecipient(bodyHtml, testName ?? '', unsubscribeUrl);
         const result = await sendEmail({
             from: FROM_ADDRESS,
             to: testEmail,
-            subject: `[TEST] ${SUBJECT}`,
+            subject: `[TEST] ${subject}`,
             html,
         });
         if (result.success) {
