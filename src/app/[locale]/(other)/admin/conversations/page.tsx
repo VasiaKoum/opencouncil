@@ -15,6 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MessageCircle, MessageSquare, ChevronRight } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
+import { ReplyForm } from '@/components/admin/conversations/ReplyForm';
+import { SendTemplateDialog } from '@/components/admin/conversations/SendTemplateDialog';
 
 export const metadata: Metadata = {
     title: 'Conversations - Admin',
@@ -150,7 +152,14 @@ function ConversationMobileCard({
     lastMessage: Message;
     messageCount: number;
 }) {
-    if (messageCount > 1) {
+    // Conversations with a Bird conversationId become expandable too — even
+    // single-message threads — so the admin can fire a reply from the form.
+    const replyTarget = lastMessage.conversationId
+        ? { conversationId: lastMessage.conversationId, phone }
+        : null;
+    const expandable = messageCount > 1 || replyTarget !== null;
+
+    if (expandable) {
         return (
             <details className="group rounded-md border bg-background overflow-hidden">
                 <summary className="cursor-pointer list-none p-3 flex items-start gap-2">
@@ -164,7 +173,7 @@ function ConversationMobileCard({
                     </div>
                 </summary>
                 <div className="border-t bg-muted/30 p-3">
-                    <ThreadDetail messages={messages} />
+                    <ThreadDetail messages={messages} replyTarget={replyTarget} />
                 </div>
             </details>
         );
@@ -185,46 +194,67 @@ function ConversationMobileCard({
  * (our side), inbound messages align left in a muted bubble (their side).
  * Timestamp + non-final status sits above each bubble. Oldest first.
  */
-function ThreadDetail({ messages }: { messages: Message[] }) {
+function ThreadDetail({
+    messages,
+    replyTarget,
+}: {
+    messages: Message[];
+    /**
+     * If the conversation has a Bird conversationId we can post replies to it
+     * via the Conversations API. The form is gated on this — without it, no
+     * Bird thread exists yet so a free-form reply has nowhere to go.
+     */
+    replyTarget?: { conversationId: string; phone: string } | null;
+}) {
     return (
-        // Cap height so a long thread doesn't push the page down — scroll
-        // internally instead. `pr-2` reserves space for the scrollbar so it
-        // doesn't overlap the right-aligned outbound bubbles.
-        <ol className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-2">
-            {messages.map((m) => {
-                const isOutbound = m.direction === 'outbound';
-                const showStatus = m.status === 'failed' || m.status === 'pending';
-                return (
-                    <li
-                        key={m.id}
-                        className={`flex flex-col gap-1 ${isOutbound ? 'items-end' : 'items-start'}`}
-                    >
-                        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground tabular-nums">
-                            <span>{formatTimestamp(m.createdAt)}</span>
-                            {showStatus && (
-                                <span
-                                    className={
-                                        m.status === 'failed'
-                                            ? 'text-destructive font-medium'
-                                            : 'font-medium'
-                                    }
-                                >
-                                    · {m.status}
-                                </span>
-                            )}
-                        </div>
-                        <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm break-words ${isOutbound
-                                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                                    : 'bg-muted text-foreground rounded-bl-sm'
-                                }`}
+        <div className="flex flex-col">
+            {/* Cap height so a long thread doesn't push the page down —
+              * scroll internally. `pr-2` reserves space for the scrollbar
+              * so it doesn't overlap the right-aligned outbound bubbles. */}
+            <ol className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-2">
+                {messages.map((m) => {
+                    const isOutbound = m.direction === 'outbound';
+                    const showStatus = m.status === 'failed' || m.status === 'pending';
+                    return (
+                        <li
+                            key={m.id}
+                            className={`flex flex-col gap-1 ${isOutbound ? 'items-end' : 'items-start'}`}
                         >
-                            {m.body}
-                        </div>
-                    </li>
-                );
-            })}
-        </ol>
+                            <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground tabular-nums">
+                                <span>{formatTimestamp(m.createdAt)}</span>
+                                {showStatus && (
+                                    <span
+                                        className={
+                                            m.status === 'failed'
+                                                ? 'text-destructive font-medium'
+                                                : 'font-medium'
+                                        }
+                                    >
+                                        · {m.status}
+                                    </span>
+                                )}
+                            </div>
+                            <div
+                                className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm break-words ${isOutbound
+                                        ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                        : 'bg-muted text-foreground rounded-bl-sm'
+                                    }`}
+                            >
+                                {m.body}
+                            </div>
+                        </li>
+                    );
+                })}
+            </ol>
+            {/* Reply form sits outside the scroll container so it stays
+              * visible regardless of how long the thread gets. */}
+            {replyTarget && (
+                <ReplyForm
+                    conversationId={replyTarget.conversationId}
+                    phone={replyTarget.phone}
+                />
+            )}
+        </div>
     );
 }
 
@@ -233,11 +263,14 @@ export default async function ConversationsPage() {
 
     return (
         <div className="container mx-auto py-8">
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold">Conversations</h1>
-                <p className="text-sm text-muted-foreground">
-                    {conversations.length} {conversations.length === 1 ? 'thread' : 'threads'}
-                </p>
+            <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                <div className="flex items-baseline gap-3">
+                    <h1 className="text-3xl font-bold">Conversations</h1>
+                    <p className="text-sm text-muted-foreground">
+                        {conversations.length} {conversations.length === 1 ? 'thread' : 'threads'}
+                    </p>
+                </div>
+                <SendTemplateDialog />
             </div>
 
             <Card>
@@ -302,13 +335,26 @@ export default async function ConversationsPage() {
                                         {conversations.map((c) => {
                                             const lastMessage = c.messages[c.messages.length - 1];
                                             const count = c.messages.length;
-                                            if (count > 1) {
+                                            // A Bird conversationId means we can post replies — make
+                                            // the row expandable even for single-message threads so
+                                            // the admin always has a reply form available.
+                                            const replyTarget = lastMessage.conversationId
+                                                ? { conversationId: lastMessage.conversationId, phone: c.phone }
+                                                : null;
+                                            const expandable = count > 1 || replyTarget !== null;
+
+                                            if (expandable) {
                                                 return (
                                                     <ExpandableTableRow
                                                         key={c.phone}
                                                         rowId={c.phone}
                                                         ariaLabel={`Conversation with ${c.phone}`}
-                                                        expandedContent={<ThreadDetail messages={c.messages} />}
+                                                        expandedContent={
+                                                            <ThreadDetail
+                                                                messages={c.messages}
+                                                                replyTarget={replyTarget}
+                                                            />
+                                                        }
                                                     >
                                                         <ConversationCells
                                                             phone={c.phone}

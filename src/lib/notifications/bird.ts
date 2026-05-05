@@ -158,6 +158,30 @@ async function makeBirdRequest(
 }
 
 /**
+ * Endpoint: POST /workspaces/{ws}/conversations/{conversationId}/messages
+ * Returns the Bird messageId on success so the caller can persist it for
+ * idempotency on inbound webhook delivery-receipt events.
+ */
+export async function sendConversationMessage(
+    conversationId: string,
+    text: string,
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+    if (!env.BIRD_API_KEY || !env.BIRD_WORKSPACE_ID) {
+        return { success: false, error: 'Bird workspace not configured' };
+    }
+    if (!conversationId) {
+        return { success: false, error: 'conversationId is required' };
+    }
+    if (!text.trim()) {
+        return { success: false, error: 'text is required' };
+    }
+
+    const url = `https://api.bird.com/workspaces/${env.BIRD_WORKSPACE_ID}/conversations/${conversationId}/messages`;
+    const payload = { body: { type: 'text', text: { text } } };
+    return makeBirdRequest(url, payload, 'Conversation message');
+}
+
+/**
  * Send WhatsApp message via Bird API using pre-approved templates
  */
 export async function sendWhatsAppMessage(
