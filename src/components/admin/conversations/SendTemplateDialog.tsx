@@ -18,12 +18,6 @@ import { sendTestTemplate } from '@/app/[locale]/(other)/admin/conversations/act
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
-/**
- * Top-right "Send test message" button on the admin Conversations page.
- * Posts a WhatsApp welcome template (BIRD_WHATSAPP_TEMPLATE_WELCOME) to a
- * phone via the Messaging API — kicks off a fresh thread the recipient can
- * reply to, opening the 24h customer-service window.
- */
 export function SendTemplateDialog() {
     const [open, setOpen] = useState(false);
     const [phone, setPhone] = useState('');

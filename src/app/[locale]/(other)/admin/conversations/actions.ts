@@ -15,10 +15,6 @@ export interface SendReplyResult {
  * Conversations API, persisting the local Message row through the lifecycle
  * (pending → sent / failed). Used by the admin "Reply" form on
  * `/admin/conversations` for testing the integration without a webhook.
- *
- * Auth: the parent admin layout already gates super-admin access, but we
- * re-check here so the server action can't be called from elsewhere by
- * non-admins.
  */
 export async function sendTestReply(input: {
     conversationId: string;
@@ -57,11 +53,6 @@ export async function sendTestReply(input: {
  * Send a WhatsApp welcome template to a phone via the Messaging API. Used by
  * the admin "Send test message" dialog on `/admin/conversations` to seed a
  * conversation for testing — kicks off a thread the user can reply to.
- *
- * Persists an outbound Message row so the send shows up in the admin list
- * even before any inbound webhook arrives. `conversationId` stays null until
- * we either receive an inbound webhook or query Bird's conversations list to
- * resolve it.
  */
 export async function sendTestTemplate(input: {
     phone: string;

@@ -1,5 +1,3 @@
-"use server";
-
 import prisma from './prisma';
 import type { Message } from '@prisma/client';
 
@@ -28,10 +26,12 @@ export async function getConversationSummaries(
     limit = 50,
     recentMessageWindow = 1000,
 ): Promise<ConversationSummary[]> {
-    // Fetch in oldest-first order so each conversation's `messages` array is
-    // already in thread order without further sorting.
+    // Fetch newest-first so the window is the *recent* slice, not the oldest;
+    // otherwise once the table exceeds `recentMessageWindow` rows, fresh
+    // conversations would silently drop off the admin view. We reverse each
+    // conversation's messages below so the page still renders oldest-first.
     const messages = await prisma.message.findMany({
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: recentMessageWindow,
     });
 
@@ -44,6 +44,14 @@ export async function getConversationSummaries(
             byPhone.set(msg.phone, { phone: msg.phone, messages: [msg] });
         }
     }
+    // Each `messages` array is currently newest-first (mirrors the query
+    // order); flip to oldest-first for chat-style rendering. The first item
+    // post-reversal is the oldest, the last item is the latest — which is
+    // also what we sort the conversation list by.
+    for (const conv of byPhone.values()) {
+        conv.messages.reverse();
+    }
+
     // Sort conversations by most recent message first.
     return Array.from(byPhone.values())
         .sort((a, b) => {

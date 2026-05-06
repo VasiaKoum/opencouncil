@@ -1,13 +1,11 @@
-"use server";
-
 import prisma from './prisma';
 import type { Message, MessageChannel, MessageDirection, MessageStatus } from '@prisma/client';
 
 /**
- * Insert a new outbound Message row in `pending` state, before we hit Bird.
- * The `birdMessageId` is set later when Bird's response comes back; until
- * then the row tracks the local-side intent + body so the audit trail is
- * preserved even if the API call fails.
+ * Insert a new outbound Message row in `pending` state, before the request 
+ * is sent to Bird. The `birdMessageId` is set later when Bird's response 
+ * comes back; until then the row tracks the local-side intent + body so the 
+ * audit trail is preserved even if the API call fails.
  */
 export async function recordOutboundMessage(input: {
     channel: MessageChannel;
@@ -31,8 +29,7 @@ export async function recordOutboundMessage(input: {
 
 /**
  * Update the status (and optionally the Bird-assigned message ID) of a
- * previously recorded message. Used to flip `pending` → `sent` / `failed`
- * after the Bird API call returns.
+ * previously recorded message.
  */
 export async function updateMessageStatus(
     id: string,

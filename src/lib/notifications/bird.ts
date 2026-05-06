@@ -158,9 +158,10 @@ async function makeBirdRequest(
 }
 
 /**
- * Endpoint: POST /workspaces/{ws}/conversations/{conversationId}/messages
- * Returns the Bird messageId on success so the caller can persist it for
- * idempotency on inbound webhook delivery-receipt events.
+ * Look up a conversation's contact participant ID. Bird's
+ * POST .../conversations/{id}/messages requires `participantId` +
+ * `participantType` so it knows which conversation member receives the
+ * message; we fetch the conversation and pick the `contact` member
  */
 export async function sendConversationMessage(
     conversationId: string,
@@ -175,9 +176,18 @@ export async function sendConversationMessage(
     if (!text.trim()) {
         return { success: false, error: 'text is required' };
     }
+    const channelId = env.BIRD_WHATSAPP_CHANNEL_ID;
+    if (!channelId) {
+        return { success: false, error: 'BIRD_WHATSAPP_CHANNEL_ID is not configured' };
+    }
 
     const url = `https://api.bird.com/workspaces/${env.BIRD_WORKSPACE_ID}/conversations/${conversationId}/messages`;
-    const payload = { body: { type: 'text', text: { text } } };
+    const payload = {
+        body: { type: 'text', text: { text } },
+        participantId: channelId,
+        participantType: 'flow',
+    };
+    console.log('Sending Conversations API message with payload:', JSON.stringify(payload, null, 2));
     return makeBirdRequest(url, payload, 'Conversation message');
 }
 
