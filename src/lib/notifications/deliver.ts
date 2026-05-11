@@ -1,10 +1,16 @@
 "use server";
 
-import { NotificationDelivery } from '@prisma/client';
 import { sendEmail } from '@/lib/email/resend';
 import { getPendingDeliveries, updateDeliveryStatus } from '@/lib/db/notifications';
-import { sendWhatsAppMessage, sendSMSMessage } from './bird';
+import { recordOutboundMessage, updateMessage } from '@/lib/db/messages';
+import {
+    createOrUpdateConversation,
+    sendSMSMessage,
+} from './bird';
+import { reconcileMessageStatus } from './reconcile';
+import { renderAfterMeetingSms, renderBeforeMeetingSms } from './sms-templates';
 import { env } from '@/env.mjs';
+import type { MessageChannel } from '@prisma/client';
 
 /**
  * Release notifications by sending all pending deliveries
@@ -109,7 +115,48 @@ async function sendEmailDelivery(delivery: any): Promise<boolean> {
 }
 
 /**
- * Send message delivery via Bird (WhatsApp with SMS fallback)
+ * Persist an outbound `Message` row for the delivery, then poll Bird until the
+ * message reaches a terminal status. The row's status is kept in sync.
+ */
+async function persistAndPollOutbound(input: {
+    deliveryId: string;
+    channel: MessageChannel;
+    phone: string;
+    body: string;
+    birdMessageId: string | null;
+    conversationId: string | null;
+}): Promise<boolean> {
+    const row = await recordOutboundMessage({
+        channel: input.channel,
+        phone: input.phone,
+        body: input.body,
+        conversationId: input.conversationId,
+        notificationDeliveryId: input.deliveryId,
+    });
+
+    await updateMessage(row.id, {
+        status: 'sent',
+        birdMessageId: input.birdMessageId,
+    });
+
+    // No message ID → can't poll. The send was accepted by Bird, so treat
+    // it as success; the row stays at `sent` and the inbound webhook will
+    // reconcile if a delivery-status callback arrives later.
+    if (!input.birdMessageId) return true;
+
+    const finalStatus = await reconcileMessageStatus({
+        localMessageId: row.id,
+        channel: input.channel,
+        birdMessageId: input.birdMessageId,
+    });
+    return finalStatus !== 'failed';
+}
+
+/**
+ * Send message delivery via Bird (WhatsApp template → SMS fallback).
+ *
+ * First send creates a Bird conversation via the Conversations API so every
+ * subsequent inbound + outbound message lands in the same conversation.
  */
 async function sendMessageDelivery(delivery: any): Promise<boolean> {
     try {
@@ -138,27 +185,58 @@ async function sendMessageDelivery(delivery: any): Promise<boolean> {
             notificationId: notification.id
         };
 
-        // Try WhatsApp first
-        const whatsappResult = await sendWhatsAppMessage(
-            delivery.phone,
-            notification.type,
-            templateParams
-        );
+        // Route through the most recent Bird conversation we have on file for
+        // this phone, or create a new one if none exists.
+        const whatsappResult = await createOrUpdateConversation({
+            phone: delivery.phone,
+            notificationType: notification.type,
+            params: templateParams,
+            notificationDeliveryId: delivery.id,
+        });
 
+        // Guard on `success` only — not `success && messageId`. Bird sometimes
+        // returns 2xx with no message ID in the response shape; falling
+        // through to SMS in that case would silently double-send.
         if (whatsappResult.success) {
-            await updateDeliveryStatus(delivery.id, 'sent', 'whatsapp');
-            console.log(`WhatsApp message sent successfully to ${delivery.phone}`);
-            return true;
+            const ok = await persistAndPollOutbound({
+                deliveryId: delivery.id,
+                channel: 'whatsapp',
+                phone: delivery.phone,
+                body: delivery.body || '[template]',
+                birdMessageId: whatsappResult.messageId ?? null,
+                conversationId: whatsappResult.conversationId ?? null,
+            });
+            if (ok) {
+                await updateDeliveryStatus(delivery.id, 'sent', 'whatsapp');
+                console.log(`WhatsApp conversation seeded for ${delivery.phone}`);
+                return true;
+            }
+            // Fall through to SMS — WhatsApp accepted but Bird reported a
+            // terminal failure (e.g. 24h window, blocked recipient).
+            console.log(`WhatsApp delivery failed post-send for ${delivery.phone}, falling back to SMS`);
+        } else {
+            console.log(`WhatsApp create-conversation failed for ${delivery.phone}: ${whatsappResult.error}`);
         }
 
-        // Fallback to SMS
-        console.log(`WhatsApp failed, falling back to SMS for ${delivery.phone}`);
-        const smsResult = await sendSMSMessage(delivery.phone, delivery.body || '');
+        const smsBody = notification.type === 'beforeMeeting'
+            ? renderBeforeMeetingSms(templateParams)
+            : renderAfterMeetingSms(templateParams);
+        const smsResult = await sendSMSMessage(delivery.phone, smsBody);
 
         if (smsResult.success) {
-            await updateDeliveryStatus(delivery.id, 'sent', 'sms');
-            console.log(`SMS sent successfully to ${delivery.phone}`);
-            return true;
+            const ok = await persistAndPollOutbound({
+                deliveryId: delivery.id,
+                channel: 'sms',
+                phone: delivery.phone,
+                body: smsBody,
+                birdMessageId: smsResult.messageId ?? null,
+                conversationId: smsResult.conversationId ?? null,
+            });
+            if (ok) {
+                await updateDeliveryStatus(delivery.id, 'sent', 'sms');
+                console.log(`SMS sent successfully to ${delivery.phone}`);
+                return true;
+            }
         }
 
         // Both failed

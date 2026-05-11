@@ -3,7 +3,8 @@
 import { sendEmail } from '@/lib/email/resend';
 import { renderReactEmailToHtml } from '@/lib/email/render';
 import { WelcomeEmail } from '@/lib/email/templates/WelcomeEmail';
-import { sendWelcomeWhatsAppMessage, sendWelcomeSMS } from './bird';
+import { createOrUpdateConversation, sendWelcomeSMS } from './bird';
+import { recordOutboundMessage, updateMessage } from '@/lib/db/messages';
 import { klitiki } from '@/lib/utils';
 
 interface City {
@@ -44,17 +45,41 @@ export async function sendWelcomeMessages(userId: string, city: City, phone?: st
 
         // Send welcome WhatsApp/SMS if phone provided
         if (phone) {
-            // Try WhatsApp first
-            const whatsappResult = await sendWelcomeWhatsAppMessage(
+            const result = await createOrUpdateConversation({
                 phone,
-                userName,
-                city.name
-            );
+                notificationType: 'welcome',
+                params: { userName, cityName: city.name },
+            });
 
-            // Fallback to SMS if WhatsApp fails
-            if (!whatsappResult.success) {
-                console.log('WhatsApp welcome failed, falling back to SMS');
-                await sendWelcomeSMS(phone, userName, city.name);
+            // Guard on `success` only — not `success && messageId`. Bird sometimes
+            // returns 2xx with no message ID in the response shape; falling through
+            // to SMS in that case would silently double-send the welcome.
+            if (result.success) {
+                const row = await recordOutboundMessage({
+                    channel: 'whatsapp',
+                    phone,
+                    body: '[welcome template]',
+                    conversationId: result.conversationId ?? null,
+                });
+                await updateMessage(row.id, {
+                    status: 'sent',
+                    birdMessageId: result.messageId ?? null,
+                });
+            } else {
+                console.log('WhatsApp welcome failed, falling back to SMS:', result.error);
+                const smsResult = await sendWelcomeSMS(phone, userName, city.name);
+                if (smsResult.success && smsResult.messageId && smsResult.body) {
+                    const row = await recordOutboundMessage({
+                        channel: 'sms',
+                        phone,
+                        body: smsResult.body,
+                        conversationId: smsResult.conversationId ?? null,
+                    });
+                    await updateMessage(row.id, {
+                        status: 'sent',
+                        birdMessageId: smsResult.messageId,
+                    });
+                }
             }
         }
 
