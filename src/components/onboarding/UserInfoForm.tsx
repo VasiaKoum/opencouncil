@@ -4,8 +4,9 @@ import { Label } from '@/components/ui/label';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { useSession } from 'next-auth/react';
-import { User, Mail, Phone, Lock, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, Lock, AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isPhoneEmpty } from '@/lib/utils/phone';
 
 export interface UserInfoFormData {
     name: string;
@@ -40,6 +41,8 @@ export function UserInfoForm({
     const [name, setName] = useState(initialData?.name || '');
     const [email, setEmail] = useState(initialData?.email || '');
     const [phone, setPhone] = useState(initialData?.phone || '');
+    const [phoneActive, setPhoneActive] = useState(!isPhoneEmpty(initialData?.phone || ''));
+    const [shouldAutoFocus, setShouldAutoFocus] = useState(false);
     const [nameError, setNameError] = useState<string | null>(null);
     const [emailError, setEmailError] = useState<string | null>(null);
     const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -52,7 +55,10 @@ export function UserInfoForm({
         if (session?.user && !isSubmitting) {
             if (session.user.email) setEmail(session.user.email);
             if (session.user.name) setName(session.user.name);
-            if (session.user.phone) setPhone(session.user.phone);
+            if (session.user.phone) {
+                setPhone(session.user.phone);
+                setPhoneActive(true);
+            }
         }
     }, [session, sessionStatus, isSubmitting]);
 
@@ -60,7 +66,10 @@ export function UserInfoForm({
         if (initialData && !isSubmitting) {
             if (initialData.name) setName(initialData.name);
             if (initialData.email) setEmail(initialData.email);
-            if (initialData.phone) setPhone(initialData.phone);
+            if (initialData.phone) {
+                setPhone(initialData.phone);
+                setPhoneActive(true);
+            }
         }
     }, [initialData, isSubmitting]);
 
@@ -98,7 +107,7 @@ export function UserInfoForm({
             setEmailError(null);
         }
 
-        if (showPhone && (!validatePhone(phone))) {
+        if (showPhone && phoneActive && !validatePhone(phone)) {
             setPhoneError('Παρακαλώ εισάγετε ένα έγκυρο τηλέφωνο (10 ψηφία)');
             valid = false;
         } else {
@@ -109,7 +118,7 @@ export function UserInfoForm({
             onSubmit({
                 name: name.trim(),
                 email: email.trim(),
-                phone: phone.trim() || undefined
+                phone: phoneActive && phone.trim() ? phone.trim() : undefined
             });
         }
     };
@@ -201,16 +210,43 @@ export function UserInfoForm({
                         <Phone className="h-4 w-4" />
                         <span>Τηλέφωνο {!requirePhone && '(προαιρετικό)'}</span>
                     </Label>
-                    <div className="phone-input-container relative">
-                        <PhoneInput
-                            defaultCountry="gr"
-                            hideDropdown={true}
-                            value={phone}
-                            onChange={(value) => setPhone(value)}
-                            inputClassName="flex h-11 md:h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            placeholder="Το τηλέφωνό σας"
+                    {phoneActive ? (
+                        <div className="phone-input-container relative">
+                            <PhoneInput
+                                defaultCountry="gr"
+                                hideDropdown={true}
+                                value={phone}
+                                onChange={(value) => setPhone(value)}
+                                inputProps={{ autoFocus: shouldAutoFocus }}
+                                inputClassName="flex h-11 md:h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pr-8"
+                                placeholder="Το τηλέφωνό σας"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPhone('');
+                                    setPhoneActive(false);
+                                    setShouldAutoFocus(false);
+                                    setPhoneError(null);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <Input
+                            id="phone"
+                            type="text"
+                            placeholder="Προσθήκη αριθμού τηλεφώνου"
+                            onFocus={() => {
+                                setPhoneActive(true);
+                                setShouldAutoFocus(true);
+                            }}
+                            readOnly
+                            className="h-11 md:h-10 text-base md:text-sm cursor-text"
                         />
-                    </div>
+                    )}
                     {phoneError && (
                         <div className="flex items-center gap-1 text-red-500 text-sm">
                             <AlertCircle className="h-3 w-3" />
