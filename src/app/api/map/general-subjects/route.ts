@@ -50,6 +50,8 @@ export async function GET(request: Request) {
 
         const whereClause: Prisma.SubjectWhereInput = {
             locationId: null,
+            // Only subjects that were actually discussed (have at least one speaker contribution).
+            contributions: { some: {} },
             councilMeeting: {
                 city: { officialSupport: true, realm },
                 released: true,

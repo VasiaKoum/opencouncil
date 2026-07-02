@@ -100,6 +100,8 @@ export async function getSubjectCountsByCity(realm: Realm): Promise<Record<strin
         // Same visibility as the map subject endpoints: officially-supported, released meetings
         // whose date is in the past (never future-dated), so the Δήμοι tab total matches the map.
         where: {
+            // Only subjects that were actually discussed (have at least one speaker contribution).
+            contributions: { some: {} },
             councilMeeting: {
                 released: true,
                 dateTime: { lte: new Date() },

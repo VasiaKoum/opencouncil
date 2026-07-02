@@ -66,6 +66,8 @@ export async function GET(request: Request) {
             locationId: {
                 not: null
             },
+            // Only subjects that were actually discussed (have at least one speaker contribution).
+            contributions: { some: {} },
             councilMeeting: {
                 city: {
                     officialSupport: true,
