@@ -97,11 +97,14 @@ export type SubjectWithRelations = Subject & {
 export async function getSubjectCountsByCity(realm: Realm): Promise<Record<string, number>> {
     const grouped = await prisma.subject.groupBy({
         by: ['cityId'],
-        // exclude "before the agenda" items so the Δήμοι tab total matches the map, which
-        // filters them out of both the located and general-subject endpoints
+        // Same visibility as the map subject endpoints: officially-supported, released meetings
+        // whose date is in the past (never future-dated), so the Δήμοι tab total matches the map.
         where: {
-            nonAgendaReason: { not: 'beforeAgenda' },
-            councilMeeting: { released: true, city: { officialSupport: true, realm } },
+            councilMeeting: {
+                released: true,
+                dateTime: { lte: new Date() },
+                city: { officialSupport: true, realm },
+            },
         },
         _count: { _all: true },
     });
