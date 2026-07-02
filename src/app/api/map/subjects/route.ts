@@ -36,14 +36,18 @@ export async function GET(request: Request) {
             dateThreshold.setMonth(dateThreshold.getMonth() - monthsBack);
         }
 
-        // Date window: explicit from/to overrides the quick range; allTime disables it.
-        let dateTimeFilter: { gte?: Date; lte?: Date } | undefined;
+        // Date window. Future-dated meetings are always excluded (upper bound = now); explicit
+        // from/to overrides the quick range; allTime only drops the lower bound, never the cap.
+        const now = new Date();
+        const dateTimeFilter: { gte?: Date; lte: Date } = { lte: now };
         if (dateFromParam || dateToParam) {
-            dateTimeFilter = {};
             if (dateFromParam) dateTimeFilter.gte = new Date(dateFromParam);
-            if (dateToParam) dateTimeFilter.lte = new Date(`${dateToParam}T23:59:59.999`);
+            if (dateToParam) {
+                const to = new Date(`${dateToParam}T23:59:59.999`);
+                if (to < now) dateTimeFilter.lte = to;
+            }
         } else if (!allTime) {
-            dateTimeFilter = { gte: dateThreshold };
+            dateTimeFilter.gte = dateThreshold;
         }
 
         console.log('🔍 API Filter params:', {
@@ -62,15 +66,13 @@ export async function GET(request: Request) {
             locationId: {
                 not: null
             },
-            // Exclude "before the agenda" (προ ημερησίας) items — keep agenda subjects.
-            nonAgendaReason: { not: 'beforeAgenda' },
             councilMeeting: {
                 city: {
                     officialSupport: true,
                     realm
                 },
                 released: true,
-                ...(dateTimeFilter && { dateTime: dateTimeFilter }),
+                dateTime: dateTimeFilter,
                 ...(bodyTypes.length > 0 && { administrativeBody: { type: { in: bodyTypes } } })
             }
         };
